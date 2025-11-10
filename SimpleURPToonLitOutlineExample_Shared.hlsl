@@ -78,6 +78,8 @@ sampler2D _BaseMap;
 sampler2D _EmissionMap;
 sampler2D _OcclusionMap;
 sampler2D _OutlineZOffsetMaskTex;
+// Added for color lookup on dynamic texture atlas cube
+sampler2D _PaletteMap;
 
 // put all your uniforms(usually things inside .shader file's properties{}) inside this CBUFFER, in order to make SRP batcher compatible
 // see -> https://blogs.unity3d.com/2019/02/28/srp-batcher-speed-up-your-rendering/
@@ -89,6 +91,10 @@ CBUFFER_START(UnityPerMaterial)
     // base color
     float4  _BaseMap_ST;
     half4   _BaseColor;
+
+    // atlas mapping
+    float   _AtlasSize;
+    float   _PaletteSize;
 
     // alpha
     half    _Cutoff;
@@ -158,6 +164,22 @@ float3 TransformPositionWSToOutlinePositionWS(float3 positionWS, float positionV
     #endif
     
     return positionWS + normalWS * outlineExpandAmount; 
+}
+
+// Remapper for color lookup on dynamic texture atlas cube
+// src_size: size of the source texture (one 2D atlas texture)
+// dst_size: size of the destination texture (the small individual color lookup texture)
+float2 RemapUVToLookup(float2 uv, float2 src_size, float2 dst_size)
+{
+    // clamp slightly so uv=1.0 never overflows
+    float2 uv_clamped = saturate(uv - 1e-5);
+    float2 src_pixel  = uv_clamped * src_size;          // convert to pixel coordinates
+
+    float2 block_size  = src_size / dst_size;           // size of one block in source pixels
+    float2 block_index = floor(src_pixel / block_size); // which block we’re in (0 … dstSize-1)
+
+    // return the UV centred on the lookup pixel; sample with point filtering
+    return (block_index + 0.5) / dst_size;
 }
 
 // if "ToonShaderIsOutline" is not defined    = do regular MVP transform
@@ -241,7 +263,13 @@ Varyings VertexShaderWork(Attributes input)
 ///////////////////////////////////////////////////////////////////////////////////////
 half4 GetFinalBaseColor(Varyings input)
 {
-    return tex2D(_BaseMap, input.uv) * _BaseColor;
+    // [Calculate atlas UV]
+    float2 atlas_uv = input.uv;
+    // [Remap to lookup pixel]
+    float2 lookup_uv = RemapUVToLookup(atlas_uv, float2(_AtlasSize, _AtlasSize), float2(_PaletteSize, _PaletteSize));
+    // [Sample palette color with lookup UVs]
+    half4 palette_color = tex2D(_PaletteMap, lookup_uv);
+    return tex2D(_BaseMap, input.uv) * palette_color *_BaseColor;
 }
 half3 GetFinalEmissionColor(Varyings input)
 {

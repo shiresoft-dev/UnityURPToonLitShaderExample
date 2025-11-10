@@ -184,6 +184,11 @@ Shader "SimpleURPToonLitExample(With Outline)"
         [Header(Base Color)]
         [MainTexture]_BaseMap("Base Map", 2D) = "white" {}
         [HDR][MainColor]_BaseColor("Base Color", Color) = (1,1,1,1)
+        
+        [Header(Atlas Mapping)]
+        _AtlasSize("Atlas Size", Float) = 2048
+        _PaletteSize("Palette Size", Float) = 4
+        [NoScaleOffset]_PaletteMap("Palette Map", 2D) = "white" {}
 
         [Header(Alpha Clipping)]
         [Toggle(_UseAlphaClipping)]_UseAlphaClipping("Enable?", Float) = 0
